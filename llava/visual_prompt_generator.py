@@ -2,8 +2,6 @@ from PIL import Image, ImageDraw
 import random, math
 import numpy as np
 import random
-from shapely.ops import unary_union
-from shapely.geometry import Point, Polygon
 from scipy.stats import multivariate_normal
 
 
@@ -32,6 +30,38 @@ words_shape ={
  }
 
 
+class Polygon:
+    def __init__(self, points):
+        self.points = points
+        x_coordinates, y_coordinates = zip(*points)
+        self.bounds = (min(x_coordinates), min(y_coordinates), max(x_coordinates), max(y_coordinates))
+    
+    def contains(self, point):
+        x, y = point
+        n = len(self.points)
+        inside = False
+        p1x,p1y = self.points[0]
+        for i in range(n+1):
+            p2x,p2y = self.points[i % n]
+            if y > min(p1y,p2y):
+                if y <= max(p1y,p2y):
+                    if x <= max(p1x,p2x):
+                        if p1y != p2y:
+                            xints = (y-p1y)*(p2x-p1x)/(p2y-p1y)+p1x
+                        if p1x == p2x or x <= xints:
+                            inside = not inside
+            p1x,p1y = p2x,p2y
+        return inside
+
+
+class Polygons:
+    def __init__(self, polygons):
+        self.polygons = polygons
+        xmins, ymins, xmaxs, ymaxs = zip(*[poly.bounds for poly in polygons])
+        self.bounds = (min(xmins), min(ymins), max(xmaxs), max(ymaxs))
+    
+    def contains(self, point):
+        return any(poly.contains(point) for poly in self.polygons)
 
 
 def draw_arrow(draw, bbox_coord, outline_color, line_width, max_arrow_length=100, max_image_size=336, image_size_anchor = 336):
@@ -151,7 +181,7 @@ def get_random_point_within_polygon(polygon):
         if  trial_num<50:
             x = np.random.uniform(minx, maxx)
             y = np.random.uniform(miny, maxy)
-            point = Point(x, y)
+            point = (x, y)
             if polygon.contains(point):
                 return x, y
             trial_num += 1
@@ -194,13 +224,13 @@ def draw_point(draw, bbox_coord, mask_polygon, outline_color=(255,0,0), radius=3
     max_tries = 10
     while True:
         cx, cy = multivariate_normal.rvs(mean=mean, cov=cov)
-        center_point = Point(cx, cy)
+        center_point = (cx, cy)
         if mask_polygon.contains(center_point):
             break
         counter += 1
         if counter >= max_tries:
             cx, cy = multivariate_normal.rvs(mean=mean, cov=cov)
-            center_point = Point(cx, cy)
+            center_point = (cx, cy)
             # print("Failed to find a point within the polygon after {} tries".format(max_tries))
             break
     
@@ -285,13 +315,13 @@ def image_blending(image, shape = 'rectangle', bbox_coord = None, segmentation =
                     polygons.append(mask_polygon)
                 mask_polygon = random.choice(polygons)
                 try: 
-                    all_polygons_union = unary_union(polygons)
+                    all_polygons_union = Polygons(polygons)
                 except:
                     all_polygons_union = None
-                    # print('Error in all_polygons_union')
+                    print('Error in all_polygons_union')
             except:
                 mask_polygon = None
-                # print('Error in Polygon Generation')
+                print('Error in Polygon Generation')
                 
                 
                 
