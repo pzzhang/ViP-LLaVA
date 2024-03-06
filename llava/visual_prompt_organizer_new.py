@@ -563,7 +563,7 @@ visual_prompt_config = dict(
     pointQA_twice = [ ["rectangle"], 'constant'],     
 ) 
         
-def vip_processor(source, image, image_size_anchor, data_args):
+def vip_processor(source, image, image_size_anchor, image_folder):
     dataset_type, sub_type = source['id'].split('-')[0],  source['id'].split('-')[1]
     visual_prompt_shape_choices, visual_prompt_style  = visual_prompt_config[dataset_type]
     
@@ -573,7 +573,7 @@ def vip_processor(source, image, image_size_anchor, data_args):
         
         
     if dataset_type in {'vcr'}:
-        source['meta_dir'] = source['meta_dir'].replace('./dataset', data_args.image_folder)
+        source['meta_dir'] = source['meta_dir'].replace('./dataset', image_folder)
         meta_data = json.load(open(source['meta_dir']))
         shape_color_info, all_instance_index, conversation  = create_question_prompt(source, visual_prompt_shape_choices, color_list = list(color_pool.items()) )
         source['bboxes'] = [meta_data['boxes'][instance_index][:-1] for instance_index in all_instance_index]
