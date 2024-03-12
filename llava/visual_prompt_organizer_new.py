@@ -379,9 +379,9 @@ def get_question(question, all_choices, use_multichoice_question, why_question =
 
 
 
-def create_question_prompt(line, shape_choices, color_list):
-    use_multichoice_question = random.random()<0.5
-    use_multichoice_why = random.random()<0.5
+def create_question_prompt(line, shape_choices, color_list, is_test=False):
+    use_multichoice_question = 1.1 if is_test else random.random()<0.5
+    use_multichoice_why = 1.1 if is_test else random.random()<0.5
     question =[ line['question']]
     if not use_multichoice_question:
         answer = [ line['answer_choices'][line['answer_label']] ]
@@ -563,7 +563,7 @@ visual_prompt_config = dict(
     pointQA_twice = [ ["rectangle"], 'constant'],     
 ) 
         
-def vip_processor(source, image, image_size_anchor, image_folder):
+def vip_processor(source, image, image_size_anchor, image_folder, is_test=False):
     dataset_type, sub_type = source['id'].split('-')[0],  source['id'].split('-')[1]
     visual_prompt_shape_choices, visual_prompt_style  = visual_prompt_config[dataset_type]
     
@@ -575,7 +575,7 @@ def vip_processor(source, image, image_size_anchor, image_folder):
     if dataset_type in {'vcr'}:
         source['meta_dir'] = source['meta_dir'].replace('./dataset', image_folder)
         meta_data = json.load(open(source['meta_dir']))
-        shape_color_info, all_instance_index, conversation  = create_question_prompt(source, visual_prompt_shape_choices, color_list = list(color_pool.items()) )
+        shape_color_info, all_instance_index, conversation  = create_question_prompt(source, visual_prompt_shape_choices, color_list = list(color_pool.items()), is_test=is_test)
         source['bboxes'] = [meta_data['boxes'][instance_index][:-1] for instance_index in all_instance_index]
         source['segmentations'] = []
         for instance_index in all_instance_index:

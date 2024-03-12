@@ -79,7 +79,7 @@ def generate_prompts(process_id, data_args):
             image_path = os.path.basename(source['image']) if key in ['v7w'] else source['image']
             image = Image.open(os.path.join(args.image_folder, image_path)).convert('RGB')
             try:
-                image, conversation = vip_processor(source, image, image_size_anchor = data_args.image_size_anchor, image_folder = data_args.vcr_json_path)
+                image, conversation = vip_processor(source, image, image_size_anchor = data_args.image_size_anchor, image_folder = data_args.vcr_json_path, is_test=data_args.is_test)
             except Exception as e:
                 print(e)
                 print(f"Failed to process {source['id']}, skipping...")
@@ -135,6 +135,11 @@ if __name__ == "__main__":
         type=str,
         required=True,
         help="the key of the dataset to be processed, in ['refcocog', 'vcr', 'vg_rel', 'flickr30k', 'v7w', 'pointQA_twice', 'coco', 'vg'].",
+    )
+    parser.add_argument(
+        "--is_test",
+        action="store_true",
+        help="whether the dataset is a test dataset",
     )
     parser.add_argument("--image_size_anchor", type=int, default=336)
     parser.add_argument("--num-workers", type=int, default=0)
