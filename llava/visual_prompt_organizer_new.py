@@ -157,6 +157,21 @@ question_prefixes = [
 ]
 
 
+region_question_prefixes = [
+    'Based on the object {}, please answer the following questions. ',
+    'In the context of the object {}, can you answer: ',
+    'With reference to the object {}, please respond to the following queries. ',
+    "Considering the object {}, what's your answer to: ",
+    'Please provide answers for the subsequent questions, keeping the object {} in mind. ',
+    'Taking into account the object {}, please answer: ',
+    'After observing the object {}, could you please answer the following: ',
+    'Upon examining the object {}, what would your answer be to: ',
+    'Using the object {} as a reference, please respond to: ',
+    'In light of the object {}, could you please answer: ',
+    'Please answer the following questions according to the object {}. '
+]
+
+
 options_prefixes = [
     'Available choices are as follows: ',
     'Select from the options below: ',
@@ -220,7 +235,8 @@ def vip_conv_generator(source, sampled_shapes, dataset_type, sub_type = ''):
                 color_name, _, shape= sampled_shapes[0]
                 word1, word2 = words_shape[shape]
                 color_string = f' {color_name}' if color_name!= None else ''
-                prompt = f'Describe the object .'
+                text = f'{word1} the{color_string} {word2}'
+                prompt = f'Describe the object {text}.'
             prompt += ' Please provide a short phrase.'
             convs_source.append([prompt, source['answer']])
     elif dataset_type == 'vg_rel':
@@ -244,6 +260,40 @@ def vip_conv_generator(source, sampled_shapes, dataset_type, sub_type = ''):
                 prompts.append(f'{word1} the{color_string} {word2}')
             prompt = f"Please describe the relationship between the subject {prompts[0]} and the object {prompts[1]}. Provide a short triplet (subject, relationship, object) to represent this. Here, the subject and object are noun phrases, and the relationship can be verbs or prepositions."
             convs_source.append([prompt, source['answer']])
+    elif dataset_type == 'as_core':
+        if sub_type == 'caption':
+            for bbox, sampled_shape in zip(source['bboxes'], sampled_shapes):
+                if 'caption' not in bbox:
+                    continue
+                color_name, _, shape= sampled_shape
+                word1, word2 = words_shape[shape]
+                color_string = f' {color_name}' if color_name!= None else ''
+                text = f'{word1} the{color_string} {word2}'
+                caption = bbox['caption'].replace("in the image", text).replace("in the picture", text)
+                if random.random() < 0.5:
+                    prompt = f'Describe the object {text} ({bbox["semantic_tag"]}).'
+                    convs_source.append([prompt, caption])
+                else:
+                    prompt = f'Describe the object {text}.'
+                    semantic_tag_answer = f'It seems to be {bbox["semantic_tag"]} {text}. '
+                    convs_source.append([prompt, semantic_tag_answer + caption])
+        elif sub_type == 'qas':
+            for bbox, sampled_shape in zip(source['bboxes'], sampled_shapes):
+                if 'qas' not in bbox:
+                    continue
+                color_name, _, shape= sampled_shape
+                word1, word2 = words_shape[shape]
+                color_string = f' {color_name}' if color_name!= None else ''
+                text = f'{word1} the{color_string} {word2}'
+                for qa_id, qa in enumerate(bbox['qas']):
+                    prompt, answer = qa['question'], qa['answer']
+                    if qa_id == 0:
+                        prompt = random.choice(region_question_prefixes).format(text) + prompt
+                    convs_source.append([prompt, answer])
+        else:
+            raise ValueError(f"Not supported sub type {sub_type} for dataset type {dataset_type}!")
+    else: 
+        raise ValueError(f"Not supported dataset type {dataset_type}!")
     conv = [] 
     for (human_conv, gpt_conv) in convs_source:
         conv.extend([
@@ -560,7 +610,8 @@ visual_prompt_config = dict(
     vg_rel =  [ ["rectangle", "ellipse", ], ''], #  [ ["rectangle", "ellipse", "arrow"], ''],
     flickr30k =[ ["rectangle", "ellipse", "arrow"], ''],
     v7w = [ ["rectangle"], 'constant'],
-    pointQA_twice = [ ["rectangle"], 'constant'],     
+    pointQA_twice = [ ["rectangle"], 'constant'], 
+    as_core =[ ["rectangle", "ellipse", "arrow"], ''],    
 ) 
         
 def vip_processor(source, image, image_size_anchor, image_folder, is_test=False):
@@ -601,24 +652,34 @@ def vip_processor(source, image, image_size_anchor, image_folder, is_test=False)
         predefined_shapes = [ random.choice(visual_prompt_shape_choices)  for _ in range(len(source['bboxes']))]
         if dataset_type in {'vg_rel'}:
             prob_random = 0 if predefined_shapes[0] == predefined_shapes[1] else 0.5
+        elif dataset_type in {'as_core'}:
+            prob_random = 0
         else:
             prob_random = 0.5
         
         color_rgb = None
         shape_color_info = [] 
         for instance_idx, (bbox, segmentation) in enumerate(zip(source['bboxes'], source['segmentations'])):
-            while color_rgb is None or color_rgb in used_colors:
+            shape = predefined_shapes[instance_idx]
+            num_trials = 0
+            while color_rgb is None or (color_rgb, shape) in used_colors:
                 if random.random() < prob_random:
                     color_name, color_rgb = None, (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))
                 else:
                     color_name, color_rgb = random.choice(list(color_pool.items()))
+                num_trials += 1
+                if num_trials > 100:
+                    print("Cannot find unique color-shape pairs!")
+                    break
             if prob_random == 0 :
-                used_colors.append(color_rgb)
+                used_colors.append((color_rgb, shape))
             shape_color_info.append([color_name, color_rgb, predefined_shapes[instance_idx]])
         conversation = vip_conv_generator(source, shape_color_info, dataset_type, sub_type = sub_type)
 
     for instance_idx, (bbox, segmentation) in enumerate(zip(source['bboxes'], source['segmentations'])):
         color_name, color_rgb, sampled_shape = shape_color_info[instance_idx] # random.choice(visual_prompt_shape_choices)
+        if dataset_type in {'as_core'}:
+            bbox = bbox['bbox']
         image = image_blending(image,  shape = sampled_shape, image_size_anchor = image_size_anchor, rgb_value=color_rgb, bbox_coord= bbox, segmentation=segmentation, visual_prompt_style = visual_prompt_style)
     
     # from matplotlib import pyplot as plt
