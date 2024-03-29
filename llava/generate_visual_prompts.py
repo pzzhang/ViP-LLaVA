@@ -85,7 +85,7 @@ def generate_prompts(process_id, data_args):
                 print(f"Failed to process {source['id']}, skipping...")
                 continue
             # save the image
-            short_image_file = os.path.join(key, os.path.splitext(image_path)[0]+f"_{_i}.png")
+            short_image_file = os.path.join(key, os.path.splitext(image_path)[0]+f"_{idx}.png")
             output_image_file = os.path.join(args.output_dir, short_image_file)
             output_image_folder = os.path.dirname(output_image_file)
             if not os.path.exists(output_image_folder):
